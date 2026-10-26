@@ -23,3 +23,7 @@ gnome-extensions enable easy-effects-preset-changer@vidalwannabe.github.io
 ```
 
 Supports GNOME Shell 48.
+
+## Credits
+
+`icons/easyeffects-symbolic.svg` is the symbolic icon of [Easy Effects](https://github.com/wwmm/easyeffects), by Wellington Wallace and contributors, licensed under GPL-3.0-or-later.

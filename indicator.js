@@ -8,7 +8,9 @@ import {QuickMenuToggle, SystemIndicator} from 'resource:///org/gnome/shell/ui/q
 
 import * as EasyEffects from './easyeffects.js';
 
-const ICON_NAME = 'audio-speakers-symbolic';
+// Bundled so the icon also shows when Easy Effects is a Flatpak.
+const ICON = Gio.FileIcon.new(Gio.File.new_for_uri(import.meta.url)
+    .get_parent().resolve_relative_path('icons/easyeffects-symbolic.svg'));
 const DESKTOP_FILE = 'com.github.wwmm.easyeffects.desktop';
 
 // The Quick Settings toggle. Clicking it turns the global bypass on or
@@ -18,10 +20,10 @@ class PresetToggle extends QuickMenuToggle {
     _init() {
         super._init({
             title: 'Easy Effects',
-            iconName: ICON_NAME,
+            gicon: ICON,
         });
 
-        this.menu.setHeader(ICON_NAME, 'Easy Effects');
+        this.menu.setHeader(ICON, 'Easy Effects');
 
         this._outputSection = new PopupMenu.PopupMenuSection();
         this._inputSection = new PopupMenu.PopupMenuSection();
@@ -65,7 +67,7 @@ class PresetToggle extends QuickMenuToggle {
         if (!this._running) {
             this.checked = false;
             this.subtitle = 'Not running';
-            this.menu.setHeader(ICON_NAME, 'Easy Effects', 'Not running');
+            this.menu.setHeader(ICON, 'Easy Effects', 'Not running');
             this._outputSection.removeAll();
             this._inputSection.removeAll();
             return;
@@ -79,7 +81,7 @@ class PresetToggle extends QuickMenuToggle {
             ]);
             this.checked = !bypassed;
             this.subtitle = active.output || null;
-            this.menu.setHeader(ICON_NAME, 'Easy Effects',
+            this.menu.setHeader(ICON, 'Easy Effects',
                 bypassed ? 'Bypassed' : active.output);
             this._fillSection(this._outputSection, 'Output',
                 presets.output, active.output);
