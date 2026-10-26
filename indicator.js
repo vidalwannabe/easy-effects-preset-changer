@@ -9,6 +9,7 @@ import {QuickMenuToggle, SystemIndicator} from 'resource:///org/gnome/shell/ui/q
 import * as EasyEffects from './easyeffects.js';
 
 const ICON_NAME = 'audio-speakers-symbolic';
+const DESKTOP_FILE = 'com.github.wwmm.easyeffects.desktop';
 
 // The Quick Settings toggle. Clicking it turns the global bypass on or
 // off; its menu lists the presets and loads the one picked.
@@ -30,6 +31,9 @@ class PresetToggle extends QuickMenuToggle {
         this._startItem = new PopupMenu.PopupMenuItem('Start Easy Effects');
         this._startItem.connect('activate', () => EasyEffects.startService());
         this.menu.addMenuItem(this._startItem);
+
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.menu.addSettingsAction('Easy Effects Settings', DESKTOP_FILE);
 
         this.connect('clicked', () => this._toggleBypass());
         this.menu.connect('open-state-changed', (_menu, open) => {
