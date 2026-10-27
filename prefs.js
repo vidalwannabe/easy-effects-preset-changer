@@ -5,35 +5,55 @@ import Gio from 'gi://Gio';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-// The options the Quick Settings menu can show: [setting, title].
-const SHOWN_OPTIONS = [
-    ['show-apps', 'Apps'],
+// The switches the Quick Settings menu can show, below Apps: [setting, title].
+const SHOWN_SWITCHES = [
     ['show-bypass', 'Bypass'],
     ['show-process-all-outputs', 'Process all outputs'],
     ['show-process-all-inputs', 'Process all inputs'],
     ['show-pause-when-silent', 'Pause when silent'],
 ];
 
-// One page: a switch per menu option, on when the menu shows it.
+// What the toggle does outside its menu: [setting, title].
+const BEHAVIOR_OPTIONS = [
+    ['scroll-presets', 'Scroll on the toggle to change the output preset'],
+];
+
+// One page: a switch per menu option, on when the menu shows it, then a
+// switch per behavior of the toggle. Apps is a row that expands to its
+// own option.
 export default class PresetChangerPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
-        window.set_default_size(600, 420);
+        window.set_default_size(600, 542);
         window.set_size_request(600, -1);
         window.set_search_enabled(false);
 
         const settings = this.getSettings();
-        const group = new Adw.PreferencesGroup({
+        const page = new Adw.PreferencesPage();
+
+        const shown = new Adw.PreferencesGroup({
             title: 'Quick Settings options',
             description: 'Choose which options are shown in the Easy Effects Quick Settings menu',
         });
-        for (const [key, title] of SHOWN_OPTIONS) {
-            const row = new Adw.SwitchRow({title});
-            settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
-            group.add(row);
-        }
+        // Its switch shows Apps; turned off, it also disables what it holds.
+        const apps = new Adw.ExpanderRow({title: 'Apps', show_enable_switch: true});
+        settings.bind('show-apps', apps, 'enable-expansion', Gio.SettingsBindFlags.DEFAULT);
+        apps.add_row(this._switchRow(settings, 'show-recording-apps', 'Recording apps'));
+        shown.add(apps);
+        for (const [key, title] of SHOWN_SWITCHES)
+            shown.add(this._switchRow(settings, key, title));
+        page.add(shown);
 
-        const page = new Adw.PreferencesPage();
-        page.add(group);
+        const behavior = new Adw.PreferencesGroup({title: 'Behavior'});
+        for (const [key, title] of BEHAVIOR_OPTIONS)
+            behavior.add(this._switchRow(settings, key, title));
+        page.add(behavior);
+
         window.add(page);
+    }
+
+    _switchRow(settings, key, title) {
+        const row = new Adw.SwitchRow({title});
+        settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
+        return row;
     }
 }

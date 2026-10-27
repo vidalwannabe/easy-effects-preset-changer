@@ -7,6 +7,7 @@ Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 export const BUS_NAME = 'com.github.wwmm.easyeffects';
 export const SCHEMA = BUS_NAME;
 export const OUTPUTS_SCHEMA = `${BUS_NAME}.streamoutputs`;
+export const INPUTS_SCHEMA = `${BUS_NAME}.streaminputs`;
 
 // Runs the easyeffects command line client and returns its stdout.
 // Only call this while BUS_NAME is owned: otherwise the client

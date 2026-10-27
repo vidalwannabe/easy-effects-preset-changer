@@ -26,6 +26,18 @@ const SETTING_SWITCHES = [
     ['inactivity-timer-enable', 'Pause when silent', 'show-pause-when-silent'],
 ];
 
+// Easy Effects settings that change when its presets or bypass change,
+// from this menu, its window or its command line client.
+const STATE_KEYS = ['bypass', 'last-loaded-output-preset', 'last-loaded-input-preset'];
+
+// Apps that record only to show the input level, as GNOME's own
+// microphone indicator skips them.
+const LEVEL_METER_APPS = ['org.gnome.VolumeControl', 'org.PulseAudio.pavucontrol'];
+
+// How long scrolling is ignored after it changed the preset (ms), so a
+// touchpad swipe moves one preset instead of several.
+const SCROLL_PAUSE = 300;
+
 // A collapsible menu section with a status text before its arrow.
 const SectionItem = GObject.registerClass(
 class SectionItem extends PopupMenu.PopupSubMenuMenuItem {
@@ -46,12 +58,18 @@ class SectionItem extends PopupMenu.PopupSubMenuMenuItem {
 
 // The Quick Settings toggle. It is checked while Easy Effects runs;
 // clicking it starts Easy Effects in the background, or opens its
-// window when already running. Its menu has collapsible lists of the
-// presets and of the apps playing, switches for the global bypass and
-// some Easy Effects settings, and an item to quit Easy Effects. The
-// preferences pick whether Apps and each of those switches show.
-const PresetToggle = GObject.registerClass(
-class PresetToggle extends QuickMenuToggle {
+// window when already running, and scrolling on it loads the next or
+// previous output preset. Its menu has collapsible lists of the presets
+// and of the apps playing or recording, switches for the global bypass
+// and some Easy Effects settings, and an item to quit Easy Effects. The
+// preferences pick which of those show. The menu follows Easy Effects
+// and the apps as they change, also while it is open.
+const PresetToggle = GObject.registerClass({
+    Properties: {
+        'bypassed': GObject.ParamSpec.boolean('bypassed', null, null,
+            GObject.ParamFlags.READWRITE, false),
+    },
+}, class PresetToggle extends QuickMenuToggle {
     _init(prefs) {
         super._init({
             title: 'Easy Effects',
@@ -60,8 +78,10 @@ class PresetToggle extends QuickMenuToggle {
 
         this.menu.setHeader(ICON, 'Easy Effects');
 
+        this._prefs = prefs;
         this._settings = EasyEffects.getSettings(EasyEffects.SCHEMA);
         this._outputSettings = EasyEffects.getSettings(EasyEffects.OUTPUTS_SCHEMA);
+        this._inputSettings = EasyEffects.getSettings(EasyEffects.INPUTS_SCHEMA);
 
         // Everything below the header only shows while Easy Effects runs.
         this._runningSection = new PopupMenu.PopupMenuSection();
@@ -72,7 +92,7 @@ class PresetToggle extends QuickMenuToggle {
         this._appsItem = new SectionItem('Apps');
         this._sectionItems = [this._outputItem, this._inputItem, this._appsItem];
         this._sectionItems.forEach(item => this._runningSection.addMenuItem(item));
-        if (this._outputSettings)
+        if (this._outputSettings && this._inputSettings)
             prefs.bind('show-apps', this._appsItem, 'visible', Gio.SettingsBindFlags.GET);
         else
             this._appsItem.visible = false;
@@ -96,6 +116,13 @@ class PresetToggle extends QuickMenuToggle {
                 switches.push([item, showKey]);
             }
         }
+
+        this._runningSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._runningSection.addAction('Quit Easy Effects', () => {
+            Main.panel.closeQuickSettings();
+            EasyEffects.quit();
+        });
+
         // The separator above the switches only shows with one of them.
         const syncSeparator = () => {
             switchesSeparator.visible = switches.some(([item]) => item.visible);
@@ -106,13 +133,9 @@ class PresetToggle extends QuickMenuToggle {
         }
         syncSeparator();
 
-        this._runningSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this._runningSection.addAction('Quit Easy Effects', () => {
-            Main.panel.closeQuickSettings();
-            EasyEffects.quit();
-        });
-
         this.connect('clicked', () => this._onClicked());
+        this.connect('scroll-event', (_actor, event) => this._onScroll(event));
+        this._lastScroll = 0;
         this.menu.connect('open-state-changed', (_menu, open) => {
             // Collapsed again on close, so each opening starts collapsed.
             if (open)
@@ -121,14 +144,37 @@ class PresetToggle extends QuickMenuToggle {
                 this._sectionItems.forEach(item => item.menu.close(false));
         });
 
+        // Changes made elsewhere: in Easy Effects, which also keeps the
+        // toggle's subtitle and the top bar icon current with the menu
+        // closed, and in the apps playing or recording.
+        this._settings?.connectObject(
+            ...STATE_KEYS.flatMap(key => [`changed::${key}`, () => this._refresh()]), this);
+        Volume.getMixerControl().connectObject(
+            'stream-added', () => this._appsChanged(),
+            'stream-removed', () => this._appsChanged(), this);
+        prefs.connectObject('changed::show-recording-apps', () => this._appsChanged(), this);
+
         this._running = false;
         this._bypassed = false;
+        this._presets = {output: [], input: []};
+        this._active = {output: '', input: ''};
         this._watchId = Gio.bus_watch_name(Gio.BusType.SESSION,
             EasyEffects.BUS_NAME, Gio.BusNameWatcherFlags.NONE,
             () => this._setRunning(true),
             () => this._setRunning(false));
         // Also when the Shell destroys the toggle itself, as on logout.
         this.connect('destroy', () => Gio.bus_unwatch_name(this._watchId));
+    }
+
+    get bypassed() {
+        return this._bypassed;
+    }
+
+    set bypassed(bypassed) {
+        if (this._bypassed === bypassed)
+            return;
+        this._bypassed = bypassed;
+        this.notify('bypassed');
     }
 
     _setRunning(running) {
@@ -152,17 +198,44 @@ class PresetToggle extends QuickMenuToggle {
         app.activate();
     }
 
+    _onScroll(event) {
+        if (!this._running || !this._prefs.get_boolean('scroll-presets'))
+            return Clutter.EVENT_PROPAGATE;
+
+        const step = scrollStep(event);
+        if (step !== 0 && event.get_time() - this._lastScroll >= SCROLL_PAUSE) {
+            this._lastScroll = event.get_time();
+            this._loadNextPreset(step);
+        }
+        return Clutter.EVENT_STOP;
+    }
+
+    // Loads the output preset `step` places after the loaded one, going
+    // round at the ends of the list.
+    async _loadNextPreset(step) {
+        const names = this._presets.output;
+        if (names.length === 0)
+            return;
+        const index = names.indexOf(this._active.output);
+        const next = index < 0
+            ? (step > 0 ? 0 : names.length - 1)
+            : (index + step + names.length) % names.length;
+        await EasyEffects.loadPreset(names[next]);
+        this._refresh();
+    }
+
     async _setBypassed(bypassed) {
         // setToggleState() in _refresh() also emits 'toggled'.
         if (!this._running || bypassed === this._bypassed)
             return;
-        this._bypassed = bypassed;
+        this.bypassed = bypassed;
         await EasyEffects.setBypassed(bypassed);
         this._refresh();
     }
 
     async _refresh() {
         if (!this._running) {
+            this.bypassed = false;
             this.subtitle = 'Not running';
             this.menu.setHeader(ICON, 'Easy Effects', 'Not running');
             return;
@@ -174,7 +247,9 @@ class PresetToggle extends QuickMenuToggle {
                 EasyEffects.getActivePresets(),
                 EasyEffects.isBypassed(),
             ]);
-            this._bypassed = bypassed;
+            this._presets = presets;
+            this._active = active;
+            this.bypassed = bypassed;
             this._bypassItem.setToggleState(bypassed);
             this.subtitle = (bypassed ? 'Bypassed' : active.output) || null;
             this.menu.setHeader(ICON, 'Easy Effects', bypassed ? 'Bypassed'
@@ -204,55 +279,107 @@ class PresetToggle extends QuickMenuToggle {
         }
     }
 
-    // Lists the apps playing, one switch each: turning it off adds the
-    // app to the Easy Effects blocklist, so its sound skips the effects.
+    // The apps list is only seen with the menu open, which refills it.
+    _appsChanged() {
+        if (this._running && this.menu.isOpen)
+            this._fillApps();
+    }
+
+    // Lists the apps playing, and the apps recording when the preferences
+    // say so, one switch each: turning it off adds the app to the Easy
+    // Effects blocklist of its kind, so its sound skips the effects.
     _fillApps() {
-        if (!this._outputSettings)
+        if (!this._outputSettings || !this._inputSettings)
             return;
 
-        const apps = new Map();
-        for (const stream of Volume.getMixerControl().get_sink_inputs()) {
-            if (stream.is_event_stream)
-                continue;
-            const name = stream.get_name();
-            const id = stream.get_application_id() || name;
-            if (name && !apps.has(id))
-                apps.set(id, stream);
+        const mixer = Volume.getMixerControl();
+        const groups = [['Playing', mixer.get_sink_inputs(), this._outputSettings]];
+        if (this._prefs.get_boolean('show-recording-apps')) {
+            const recording = mixer.get_source_outputs()
+                .filter(stream => !LEVEL_METER_APPS.includes(stream.get_application_id()));
+            groups.push(['Recording', recording, this._inputSettings]);
         }
 
-        this._appsItem.setStatus(apps.size > 0 ? `${apps.size} playing` : 'Nothing playing');
         this._appsItem.menu.removeAll();
-        this._appsItem.setSensitive(apps.size > 0);
+        const counts = [];
+        for (const [label, streams, settings] of groups) {
+            const apps = appsOf(streams);
+            if (apps.size === 0)
+                continue;
+            counts.push(`${apps.size} ${label.toLowerCase()}`);
+            if (groups.length > 1)
+                this._appsItem.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem(label));
 
-        const blocklist = this._outputSettings.get_strv('blocklist');
-        for (const [id, stream] of apps) {
-            const name = stream.get_name();
-            const blocked = blocklist.includes(id) || blocklist.includes(name);
-            const item = new PopupMenu.PopupSwitchMenuItem(name, !blocked);
-            item.insert_child_at_index(new St.Icon({
-                style_class: 'popup-menu-icon',
-                icon_name: stream.get_icon_name() || 'application-x-executable-symbolic',
-            }), 0);
-            item.connect('toggled', (_item, state) => this._setAppBlocked(id, name, !state));
-            this._appsItem.menu.addMenuItem(item);
+            const blocklist = settings.get_strv('blocklist');
+            for (const [id, stream] of apps) {
+                const name = stream.get_name();
+                const blocked = blocklist.includes(id) || blocklist.includes(name);
+                const item = new PopupMenu.PopupSwitchMenuItem(name, !blocked);
+                item.insert_child_at_index(new St.Icon({
+                    style_class: 'popup-menu-icon',
+                    icon_name: stream.get_icon_name() || 'application-x-executable-symbolic',
+                }), 0);
+                item.connect('toggled', (_item, state) => setAppBlocked(settings, id, name, !state));
+                this._appsItem.menu.addMenuItem(item);
+            }
         }
-    }
 
-    _setAppBlocked(id, name, blocked) {
-        const blocklist = this._outputSettings.get_strv('blocklist')
-            .filter(entry => entry !== id && entry !== name);
-        if (blocked)
-            blocklist.push(id);
-        this._outputSettings.set_strv('blocklist', blocklist);
+        this._appsItem.setStatus(counts.join(' · ') ||
+            (groups.length > 1 ? 'No apps' : 'Nothing playing'));
+        this._appsItem.setSensitive(counts.length > 0);
     }
-
 });
 
+// The apps of some mixer streams, one stream each, by app id (or name).
+function appsOf(streams) {
+    const apps = new Map();
+    for (const stream of streams) {
+        if (stream.is_event_stream)
+            continue;
+        const name = stream.get_name();
+        const id = stream.get_application_id() || name;
+        if (name && !apps.has(id))
+            apps.set(id, stream);
+    }
+    return apps;
+}
+
+function setAppBlocked(settings, id, name, blocked) {
+    const blocklist = settings.get_strv('blocklist')
+        .filter(entry => entry !== id && entry !== name);
+    if (blocked)
+        blocklist.push(id);
+    settings.set_strv('blocklist', blocklist);
+}
+
+// -1 for a scroll up, 1 for a scroll down, 0 for neither.
+function scrollStep(event) {
+    switch (event.get_scroll_direction()) {
+    case Clutter.ScrollDirection.UP:
+        return -1;
+    case Clutter.ScrollDirection.DOWN:
+        return 1;
+    case Clutter.ScrollDirection.SMOOTH:
+        return Math.sign(event.get_scroll_delta()[1]);
+    default:
+        return 0;
+    }
+}
+
+// Adds the toggle to Quick Settings, and an icon to the top bar shown
+// while the global bypass is on.
 export const PresetIndicator = GObject.registerClass(
 class PresetIndicator extends SystemIndicator {
     _init(prefs) {
         super._init();
-        this.quickSettingsItems.push(new PresetToggle(prefs));
+
+        const toggle = new PresetToggle(prefs);
+        this.quickSettingsItems.push(toggle);
+
+        this._bypassIcon = this._addIndicator();
+        this._bypassIcon.gicon = ICON;
+        toggle.bind_property('bypassed', this._bypassIcon, 'visible',
+            GObject.BindingFlags.SYNC_CREATE);
     }
 
     destroy() {
