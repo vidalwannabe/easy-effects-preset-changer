@@ -1,8 +1,9 @@
 {
   "uuid": "easy-effects-preset-changer@vidalwannabe.github.io",
   "name": "Easy Effects Preset Changer",
-  "description": "Switch Easy Effects presets and toggle global bypass from Quick Settings.",
+  "description": "Start Easy Effects, switch its presets, pick which apps it processes and toggle its global bypass from Quick Settings.",
   "url": "https://github.com/vidalwannabe/easy-effects-preset-changer",
+  "settings-schema": "org.gnome.shell.extensions.easy-effects-preset-changer",
   "shell-version": [
     "48"
   ],

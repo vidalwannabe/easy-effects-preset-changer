@@ -8,7 +8,7 @@ import {PresetIndicator} from './indicator.js';
 // The extension: it only adds the indicator to Quick Settings.
 export default class PresetChangerExtension extends Extension {
     enable() {
-        this._indicator = new PresetIndicator();
+        this._indicator = new PresetIndicator(this.getSettings());
         Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
     }
 

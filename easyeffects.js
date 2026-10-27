@@ -5,6 +5,8 @@ import Gio from 'gi://Gio';
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async');
 
 export const BUS_NAME = 'com.github.wwmm.easyeffects';
+export const SCHEMA = BUS_NAME;
+export const OUTPUTS_SCHEMA = `${BUS_NAME}.streamoutputs`;
 
 // Runs the easyeffects command line client and returns its stdout.
 // Only call this while BUS_NAME is owned: otherwise the client
@@ -52,6 +54,19 @@ export async function isBypassed() {
 
 export async function setBypassed(bypassed) {
     await run('-b', bypassed ? '1' : '2');
+}
+
+export async function quit() {
+    await run('-q');
+}
+
+// Returns the Gio.Settings of an Easy Effects schema, or null when it
+// is not installed (as with the Flatpak, whose settings are sandboxed).
+export function getSettings(id) {
+    const source = Gio.SettingsSchemaSource.get_default();
+    if (!source.lookup(id, true))
+        return null;
+    return new Gio.Settings({schema_id: id});
 }
 
 // Starts Easy Effects in the background, without its window.

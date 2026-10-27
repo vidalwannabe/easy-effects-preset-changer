@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.easy-effects-preset-changer"
+          path="/org/gnome/shell/extensions/easy-effects-preset-changer/">
+    <!-- Which switches the Quick Settings menu shows. -->
+    <key name="show-bypass" type="b">
+      <default>true</default>
+    </key>
+    <key name="show-process-all-outputs" type="b">
+      <default>true</default>
+    </key>
+    <key name="show-process-all-inputs" type="b">
+      <default>true</default>
+    </key>
+    <key name="show-pause-when-silent" type="b">
+      <default>true</default>
+    </key>
+  </schema>
+</schemalist>
