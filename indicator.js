@@ -49,7 +49,7 @@ class SectionItem extends PopupMenu.PopupSubMenuMenuItem {
 // window when already running. Its menu has collapsible lists of the
 // presets and of the apps playing, switches for the global bypass and
 // some Easy Effects settings, and an item to quit Easy Effects. The
-// preferences pick which of those switches show.
+// preferences pick whether Apps and each of those switches show.
 const PresetToggle = GObject.registerClass(
 class PresetToggle extends QuickMenuToggle {
     _init(prefs) {
@@ -72,7 +72,10 @@ class PresetToggle extends QuickMenuToggle {
         this._appsItem = new SectionItem('Apps');
         this._sectionItems = [this._outputItem, this._inputItem, this._appsItem];
         this._sectionItems.forEach(item => this._runningSection.addMenuItem(item));
-        this._appsItem.visible = this._outputSettings !== null;
+        if (this._outputSettings)
+            prefs.bind('show-apps', this._appsItem, 'visible', Gio.SettingsBindFlags.GET);
+        else
+            this._appsItem.visible = false;
 
         // Picking an item keeps Quick Settings open: GNOME closes it from
         // the itemActivated() of the menu holding the item.

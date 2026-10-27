@@ -8,7 +8,7 @@ GNOME Shell extension that adds an **Easy Effects** toggle to Quick Settings:
   - **Apps** lists the apps playing sound, each with a switch: turn it off to add the app to the Easy Effects blocklist, so its sound skips the effects.
 - Below them, switches for the global **Bypass**, **Process all outputs**, **Process all inputs** and **Pause when silent** (the Easy Effects inactivity timer).
 - **Quit Easy Effects**, at the bottom, stops Easy Effects.
-- The preferences choose which of the four switches the menu shows.
+- The preferences choose whether the menu shows **Apps** and each of the four switches.
 
 It talks to Easy Effects through its command line client (`easyeffects -p`, `-a`, `-l`, `-b`, `-q`) and its settings, so it only needs Easy Effects 7 installed natively.
 

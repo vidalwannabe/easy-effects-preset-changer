@@ -2,7 +2,10 @@
 <schemalist>
   <schema id="org.gnome.shell.extensions.easy-effects-preset-changer"
           path="/org/gnome/shell/extensions/easy-effects-preset-changer/">
-    <!-- Which switches the Quick Settings menu shows. -->
+    <!-- Which options the Quick Settings menu shows. -->
+    <key name="show-apps" type="b">
+      <default>true</default>
+    </key>
     <key name="show-bypass" type="b">
       <default>true</default>
     </key>
