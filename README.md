@@ -2,7 +2,7 @@
 
 GNOME Shell extension that adds an **Easy Effects** toggle to Quick Settings:
 
-- The toggle is on while Easy Effects is running. Click it to start Easy Effects in the background, or, when it is already running, to open its window. Scroll on it to load the next or previous output preset.
+- The toggle is on while Easy Effects is running. Click it to start Easy Effects in the background, or, when it is already running, to open its window.
 - Its menu has three collapsible lists, all collapsed whenever the menu opens:
   - **Output** and **Input** list your presets, with the loaded one checked and shown next to the list name. Pick one to load it.
   - **Apps** lists the apps playing sound, and the apps recording it, each with a switch: turn it off to add the app to the Easy Effects blocklist, so its sound skips the effects.
@@ -10,7 +10,7 @@ GNOME Shell extension that adds an **Easy Effects** toggle to Quick Settings:
 - **Quit Easy Effects**, at the bottom, stops Easy Effects.
 - The menu follows Easy Effects and the apps as they change, also while it is open.
 - While the global bypass is on, an Easy Effects icon shows in the top bar.
-- The preferences choose whether the menu shows Apps and each switch, whether Apps lists the apps recording, and whether scrolling is on.
+- The preferences choose whether the menu shows Apps and each switch and whether Apps lists the apps recording.
 
 It talks to Easy Effects through its command line client (`easyeffects -p`, `-a`, `-l`, `-b`, `-q`) and its settings, so it only needs Easy Effects 7 installed natively.
 

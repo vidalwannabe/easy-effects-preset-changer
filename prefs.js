@@ -13,17 +13,11 @@ const SHOWN_SWITCHES = [
     ['show-pause-when-silent', 'Pause when silent'],
 ];
 
-// What the toggle does outside its menu: [setting, title].
-const BEHAVIOR_OPTIONS = [
-    ['scroll-presets', 'Scroll on the toggle to change the output preset'],
-];
-
-// One page: a switch per menu option, on when the menu shows it, then a
-// switch per behavior of the toggle. Apps is a row that expands to its
-// own option.
+// One page: a switch per menu option, on when the menu shows it. Apps is
+// a row that expands to its own option.
 export default class PresetChangerPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
-        window.set_default_size(600, 542);
+        window.set_default_size(600, 422);
         window.set_size_request(600, -1);
         window.set_search_enabled(false);
 
@@ -42,11 +36,6 @@ export default class PresetChangerPreferences extends ExtensionPreferences {
         for (const [key, title] of SHOWN_SWITCHES)
             shown.add(this._switchRow(settings, key, title));
         page.add(shown);
-
-        const behavior = new Adw.PreferencesGroup({title: 'Behavior'});
-        for (const [key, title] of BEHAVIOR_OPTIONS)
-            behavior.add(this._switchRow(settings, key, title));
-        page.add(behavior);
 
         window.add(page);
     }

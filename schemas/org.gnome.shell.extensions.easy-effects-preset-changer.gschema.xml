@@ -21,9 +21,5 @@
     <key name="show-pause-when-silent" type="b">
       <default>true</default>
     </key>
-    <!-- Scrolling on the toggle loads the next or previous output preset. -->
-    <key name="scroll-presets" type="b">
-      <default>true</default>
-    </key>
   </schema>
 </schemalist>

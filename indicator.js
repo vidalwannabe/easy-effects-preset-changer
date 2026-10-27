@@ -34,10 +34,6 @@ const STATE_KEYS = ['bypass', 'last-loaded-output-preset', 'last-loaded-input-pr
 // microphone indicator skips them.
 const LEVEL_METER_APPS = ['org.gnome.VolumeControl', 'org.PulseAudio.pavucontrol'];
 
-// How long scrolling is ignored after it changed the preset (ms), so a
-// touchpad swipe moves one preset instead of several.
-const SCROLL_PAUSE = 300;
-
 // A collapsible menu section with a status text before its arrow.
 const SectionItem = GObject.registerClass(
 class SectionItem extends PopupMenu.PopupSubMenuMenuItem {
@@ -58,11 +54,10 @@ class SectionItem extends PopupMenu.PopupSubMenuMenuItem {
 
 // The Quick Settings toggle. It is checked while Easy Effects runs;
 // clicking it starts Easy Effects in the background, or opens its
-// window when already running, and scrolling on it loads the next or
-// previous output preset. Its menu has collapsible lists of the presets
-// and of the apps playing or recording, switches for the global bypass
-// and some Easy Effects settings, and an item to quit Easy Effects. The
-// preferences pick which of those show. The menu follows Easy Effects
+// window when already running. Its menu has collapsible lists of the
+// presets and of the apps playing or recording, switches for the global
+// bypass and some Easy Effects settings, and an item to quit Easy
+// Effects. The preferences pick which of those show. The menu follows Easy Effects
 // and the apps as they change, also while it is open.
 const PresetToggle = GObject.registerClass({
     Properties: {
@@ -134,8 +129,6 @@ const PresetToggle = GObject.registerClass({
         syncSeparator();
 
         this.connect('clicked', () => this._onClicked());
-        this.connect('scroll-event', (_actor, event) => this._onScroll(event));
-        this._lastScroll = 0;
         this.menu.connect('open-state-changed', (_menu, open) => {
             // Collapsed again on close, so each opening starts collapsed.
             if (open)
@@ -156,8 +149,6 @@ const PresetToggle = GObject.registerClass({
 
         this._running = false;
         this._bypassed = false;
-        this._presets = {output: [], input: []};
-        this._active = {output: '', input: ''};
         this._watchId = Gio.bus_watch_name(Gio.BusType.SESSION,
             EasyEffects.BUS_NAME, Gio.BusNameWatcherFlags.NONE,
             () => this._setRunning(true),
@@ -198,32 +189,6 @@ const PresetToggle = GObject.registerClass({
         app.activate();
     }
 
-    _onScroll(event) {
-        if (!this._running || !this._prefs.get_boolean('scroll-presets'))
-            return Clutter.EVENT_PROPAGATE;
-
-        const step = scrollStep(event);
-        if (step !== 0 && event.get_time() - this._lastScroll >= SCROLL_PAUSE) {
-            this._lastScroll = event.get_time();
-            this._loadNextPreset(step);
-        }
-        return Clutter.EVENT_STOP;
-    }
-
-    // Loads the output preset `step` places after the loaded one, going
-    // round at the ends of the list.
-    async _loadNextPreset(step) {
-        const names = this._presets.output;
-        if (names.length === 0)
-            return;
-        const index = names.indexOf(this._active.output);
-        const next = index < 0
-            ? (step > 0 ? 0 : names.length - 1)
-            : (index + step + names.length) % names.length;
-        await EasyEffects.loadPreset(names[next]);
-        this._refresh();
-    }
-
     async _setBypassed(bypassed) {
         // setToggleState() in _refresh() also emits 'toggled'.
         if (!this._running || bypassed === this._bypassed)
@@ -247,8 +212,6 @@ const PresetToggle = GObject.registerClass({
                 EasyEffects.getActivePresets(),
                 EasyEffects.isBypassed(),
             ]);
-            this._presets = presets;
-            this._active = active;
             this.bypassed = bypassed;
             this._bypassItem.setToggleState(bypassed);
             this.subtitle = (bypassed ? 'Bypassed' : active.output) || null;
@@ -350,20 +313,6 @@ function setAppBlocked(settings, id, name, blocked) {
     if (blocked)
         blocklist.push(id);
     settings.set_strv('blocklist', blocklist);
-}
-
-// -1 for a scroll up, 1 for a scroll down, 0 for neither.
-function scrollStep(event) {
-    switch (event.get_scroll_direction()) {
-    case Clutter.ScrollDirection.UP:
-        return -1;
-    case Clutter.ScrollDirection.DOWN:
-        return 1;
-    case Clutter.ScrollDirection.SMOOTH:
-        return Math.sign(event.get_scroll_delta()[1]);
-    default:
-        return 0;
-    }
 }
 
 // Adds the toggle to Quick Settings, and an icon to the top bar shown
