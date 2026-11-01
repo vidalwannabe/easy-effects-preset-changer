@@ -3,10 +3,8 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
-import Shell from 'gi://Shell';
 import St from 'gi://St';
 
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {QuickMenuToggle, SystemIndicator} from 'resource:///org/gnome/shell/ui/quickSettings.js';
 import * as Volume from 'resource:///org/gnome/shell/ui/status/volume.js';
@@ -53,11 +51,11 @@ class SectionItem extends PopupMenu.PopupSubMenuMenuItem {
 });
 
 // The Quick Settings toggle. It is checked while Easy Effects runs;
-// clicking it starts Easy Effects in the background, or opens its
-// window when already running. Its menu has collapsible lists of the
-// presets and of the apps playing or recording, switches for the global
-// bypass and some Easy Effects settings, and an item to quit Easy
-// Effects. The preferences pick which of those show. The menu follows Easy Effects
+// clicking it starts Easy Effects in the background, or quits it when
+// already running. Its menu has collapsible lists of the presets and of
+// the apps playing or recording, switches for the global bypass and some
+// Easy Effects settings, and an item to open the Easy Effects window.
+// The preferences pick which of those show. The menu follows Easy Effects
 // and the apps as they change, also while it is open.
 const PresetToggle = GObject.registerClass({
     Properties: {
@@ -112,11 +110,10 @@ const PresetToggle = GObject.registerClass({
             }
         }
 
-        this._runningSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this._runningSection.addAction('Quit Easy Effects', () => {
-            Main.panel.closeQuickSettings();
-            EasyEffects.quit();
-        });
+        // Outside the section, as it also starts Easy Effects when stopped.
+        this._openSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this._openSeparator);
+        this.menu.addSettingsAction('Open Easy Effects', DESKTOP_FILE);
 
         // The separator above the switches only shows with one of them.
         const syncSeparator = () => {
@@ -172,21 +169,15 @@ const PresetToggle = GObject.registerClass({
         this._running = running;
         this.checked = running;
         this._runningSection.actor.visible = running;
+        this._openSeparator.visible = running;
         this._refresh();
     }
 
     _onClicked() {
-        if (!this._running) {
+        if (this._running)
+            EasyEffects.quit();
+        else
             EasyEffects.startService();
-            return;
-        }
-
-        const app = Shell.AppSystem.get_default().lookup_app(DESKTOP_FILE);
-        if (!app)
-            return;
-        Main.overview.hide();
-        Main.panel.closeQuickSettings();
-        app.activate();
     }
 
     async _setBypassed(bypassed) {
